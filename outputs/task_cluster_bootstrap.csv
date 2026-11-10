@@ -1,0 +1,2 @@
+n_tasks,n_tasks_with_failures,n_failed_runs,n_bootstrap_requested,n_bootstrap_valid,bootstrap_pearson_mean,bootstrap_pearson_ci_lower,bootstrap_pearson_ci_upper,bootstrap_warning,bootstrap_method
+30,4,6,2000,1956,0.5655945475378062,0.2877098881328844,0.7554348015562165,Failures occurred in fewer than five tasks. The cluster-bootstrap interval should be interpreted cautiously because failure information is concentrated in very few tasks.,Resampling complete task clusters with replacement

@@ -1,20 +1,20 @@
+
 """
 TrustEval Member 3
 Complete Statistical Validation Pipeline
 
-IMPORTANT:
-This version does NOT use human ratings.
-
-It automatically finds:
-
-    TrustEval-main/results/trust_scores.json
-
-regardless of the folder from which the command is executed.
+This version:
+- Does NOT use human ratings.
+- Validates execution-based trust scores.
+- Performs task-level statistical validation.
+- Evaluates execution outcome associations.
+- Performs task-cluster bootstrap.
+- Reports failed executions.
+- Automatically generates comparison_tables.md.
 """
 
 from pathlib import Path
 import sys
-
 import pandas as pd
 
 
@@ -22,48 +22,26 @@ import pandas as pd
 # PROJECT PATHS
 # ============================================================
 
-# run_all.py is located at:
-#
-# TrustEval-main/
-#     validation_scripts/
-#         run_all.py
-#
-# Therefore parents[1] = TrustEval-main
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-PROJECT_ROOT = Path(
-    __file__
-).resolve().parents[1]
+VALIDATION_DIR = PROJECT_ROOT / "validation"
 
-VALIDATION_DIR = (
-    PROJECT_ROOT / "validation"
-)
+RESULTS_DIR = PROJECT_ROOT / "results"
 
-RESULTS_DIR = (
-    PROJECT_ROOT / "results"
-)
+OUTPUT_DIR = PROJECT_ROOT / "outputs"
 
-OUTPUT_DIR = (
-    PROJECT_ROOT / "outputs"
-)
+FIGURES_DIR = OUTPUT_DIR / "figures"
 
-FIGURES_DIR = (
-    OUTPUT_DIR / "figures"
-)
+TRUST_SCORES_PATH = RESULTS_DIR / "trust_scores.json"
 
 
 # ============================================================
 # PYTHON IMPORT PATH
 # ============================================================
 
-sys.path.insert(
-    0,
-    str(PROJECT_ROOT)
-)
-
-sys.path.insert(
-    0,
-    str(VALIDATION_DIR)
-)
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(VALIDATION_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 # ============================================================
@@ -81,26 +59,20 @@ from ranking_stability import (
     ranking_stability
 )
 
-from sensitivity_analysis import (
-    sensitivity_analysis
-)
+from sensitivity_analysis import sensitivity_analysis
 
 from repeatability import (
     repeatability_analysis,
     repeatability_summary
 )
 
-from ablation import (
-    ablation_study
-)
+from ablation import ablation_study
 
 from baseline_comparison import (
     compare_baseline_vs_trusteval
 )
 
-from cross_domain_validation import (
-    cross_domain_validation
-)
+from cross_domain_validation import cross_domain_validation
 
 from robustness_testing import (
     leave_one_task_out,
@@ -108,57 +80,37 @@ from robustness_testing import (
 )
 
 from calibration import (
-    calibration_analysis
+    calibration_analysis,
+    task_cluster_bootstrap,
+    failure_sample_report,
+    failure_distribution
 )
+
+# Import comparison table generator
+
+from format_comparison_tables import generate_comparison_tables
 
 
 # ============================================================
 # CREATE OUTPUT DIRECTORIES
 # ============================================================
 
-OUTPUT_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-FIGURES_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# ============================================================
-# TRUST SCORE FILE
-# ============================================================
-
-TRUST_SCORES_PATH = (
-    RESULTS_DIR
-    / "trust_scores.json"
-)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
 # HELPER FUNCTION
 # ============================================================
 
-def save_dataframe(
-    dataframe,
-    filename
-):
+def save_dataframe(dataframe, filename):
 
-    output_path = (
-        OUTPUT_DIR
-        / filename
-    )
+    output_path = OUTPUT_DIR / filename
 
-    dataframe.to_csv(
-        output_path,
-        index=False
-    )
+    dataframe.to_csv(output_path, index=False)
 
-    print(
-        f"Saved: {output_path}"
-    )
+    print(f"Saved: {output_path}")
 
 
 # ============================================================
@@ -169,66 +121,28 @@ def check_project_structure():
 
     print("\nChecking project structure...")
 
-    print(
-        f"Project root:\n"
-        f"  {PROJECT_ROOT}"
-    )
+    print(f"Project root: {PROJECT_ROOT}")
 
-    print(
-        f"Results directory:\n"
-        f"  {RESULTS_DIR}"
-    )
+    print(f"Results directory: {RESULTS_DIR}")
 
-    print(
-        f"Trust scores file:\n"
-        f"  {TRUST_SCORES_PATH}"
-    )
+    print(f"Trust scores file: {TRUST_SCORES_PATH}")
 
-    print(
-        f"Output directory:\n"
-        f"  {OUTPUT_DIR}"
-    )
-
-    # --------------------------------------------------------
-    # Check results folder
-    # --------------------------------------------------------
+    print(f"Output directory: {OUTPUT_DIR}")
 
     if not RESULTS_DIR.exists():
 
         raise FileNotFoundError(
-            "\nERROR: The results folder does not exist.\n\n"
-            f"Expected:\n"
-            f"  {RESULTS_DIR}\n\n"
-            "Make sure your project has a 'results' folder."
+            f"Results directory does not exist: {RESULTS_DIR}"
         )
-
-    # --------------------------------------------------------
-    # Check trust_scores.json
-    # --------------------------------------------------------
 
     if not TRUST_SCORES_PATH.exists():
 
-        print("\nFiles currently inside results:")
-
-        for file in RESULTS_DIR.iterdir():
-
-            print(
-                f"  - {file.name}"
-            )
-
         raise FileNotFoundError(
-            "\nERROR: Could not find trust_scores.json.\n\n"
-            "The program expected:\n"
-            f"  {TRUST_SCORES_PATH}\n\n"
-            "If the file has a different name, "
-            "rename it to trust_scores.json.\n"
-            "If it is somewhere else, move/copy it "
-            "into the results folder."
+            f"Could not find trust_scores.json at: "
+            f"{TRUST_SCORES_PATH}"
         )
 
-    print(
-        "\ntrust_scores.json FOUND."
-    )
+    print("\ntrust_scores.json FOUND.")
 
 
 # ============================================================
@@ -238,14 +152,15 @@ def check_project_structure():
 def main():
 
     print("\n")
+
     print("=" * 75)
-    print(
-        "TrustEval — Member 3 Statistical Validation"
-    )
+
+    print("TrustEval — Member 3 Statistical Validation")
+
     print("=" * 75)
 
     # --------------------------------------------------------
-    # CHECK PATHS
+    # CHECK PROJECT STRUCTURE
     # --------------------------------------------------------
 
     check_project_structure()
@@ -256,66 +171,55 @@ def main():
 
     print("\nLoading Member 2 trust scores...")
 
-    trust = load_trust_scores(
-        TRUST_SCORES_PATH
-    )
+    trust = load_trust_scores(TRUST_SCORES_PATH)
 
-    print(
-        f"\nLoaded {len(trust)} execution runs."
-    )
+    if trust.empty:
 
-    print(
-        f"Tasks: "
-        f"{trust['task_id'].nunique()}"
-    )
+        raise ValueError(
+            "The loaded trust scores dataframe is empty."
+        )
 
-    print(
-        f"Frameworks: "
-        f"{trust['framework'].nunique()}"
-    )
+    required_columns = {
+        "task_id",
+        "framework",
+        "domain",
+        "repetition",
+        "composite_score",
+        "status"
+    }
 
-    print(
-        f"Domains: "
-        f"{trust['domain'].nunique()}"
-    )
+    missing_columns = required_columns - set(trust.columns)
 
-    print(
-        f"Repetitions: "
-        f"{trust['repetition'].nunique()}"
-    )
+    if missing_columns:
 
-    print(
-        "\nFrameworks:"
-    )
+        raise ValueError(
+            "Missing required trust score columns: "
+            + ", ".join(sorted(missing_columns))
+        )
 
-    print(
-        trust["framework"]
-        .dropna()
-        .unique()
-    )
+    print(f"\nLoaded {len(trust)} execution runs.")
+
+    print(f"Tasks: {trust['task_id'].nunique()}")
+
+    print(f"Frameworks: {trust['framework'].nunique()}")
+
+    print(f"Domains: {trust['domain'].nunique()}")
+
+    print(f"Repetitions: {trust['repetition'].nunique()}")
+
+    print("\nFrameworks:")
+
+    print(trust["framework"].dropna().unique())
 
     # ========================================================
     # 1. CONFIDENCE INTERVALS
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[1/9] Task-level bootstrap confidence intervals"
-    )
-    print("-" * 75)
+    print("\n[1/12] Task-level bootstrap confidence intervals")
 
-    ci = (
-        per_agent_confidence_intervals(
-            trust
-        )
-    )
+    ci = per_agent_confidence_intervals(trust)
 
-    print(
-        ci.to_string(
-            index=False
-        )
-    )
+    print(ci.to_string(index=False))
 
     save_dataframe(
         ci,
@@ -326,47 +230,22 @@ def main():
     # 2. RANKING STABILITY
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[2/9] Framework ranking stability"
-    )
-    print("-" * 75)
+    print("\n[2/12] Framework ranking stability")
 
-    ranking = (
-        get_ranking(
-            trust
-        )
-    )
+    ranking = get_ranking(trust)
 
-    stability = (
-        ranking_stability(
-            trust
-        )
-    )
+    stability = ranking_stability(trust)
 
-    print(
-        "\nFramework ranking:"
-    )
+    print("\nFramework ranking:")
 
-    print(
-        ranking
-        .sort_values()
-        .to_string()
-    )
+    print(ranking.sort_values().to_string())
 
-    print(
-        "\nRanking stability:"
-    )
+    print("\nRanking stability:")
 
-    print(
-        stability
-    )
+    print(stability)
 
     save_dataframe(
-        pd.DataFrame(
-            [stability]
-        ),
+        pd.DataFrame([stability]),
         "ranking_stability.csv"
     )
 
@@ -374,20 +253,11 @@ def main():
     # 3. SENSITIVITY ANALYSIS
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[3/9] Domain-aware weight sensitivity"
-    )
-    print("-" * 75)
+    print("\n[3/12] Domain-aware weight sensitivity")
 
     sensitivity_results = []
 
-    for perturbation in (
-        0.10,
-        0.20,
-        0.30
-    ):
+    for perturbation in (0.10, 0.20, 0.30):
 
         print(
             f"\nTesting ±{perturbation * 100:.0f}% "
@@ -401,26 +271,14 @@ def main():
             seed=42
         )
 
-        sensitivity_results.append(
-            result
-        )
+        sensitivity_results.append(result)
 
-    if sensitivity_results:
-
-        sensitivity = pd.concat(
-            sensitivity_results,
-            ignore_index=True
-        )
-
-    else:
-
-        sensitivity = pd.DataFrame()
-
-    print(
-        sensitivity.to_string(
-            index=False
-        )
+    sensitivity = pd.concat(
+        sensitivity_results,
+        ignore_index=True
     )
+
+    print(sensitivity.to_string(index=False))
 
     save_dataframe(
         sensitivity,
@@ -431,24 +289,11 @@ def main():
     # 4. ABLATION
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[4/9] Trust-dimension ablation"
-    )
-    print("-" * 75)
+    print("\n[4/12] Trust-dimension ablation")
 
-    ablation = (
-        ablation_study(
-            trust
-        )
-    )
+    ablation = ablation_study(trust)
 
-    print(
-        ablation.to_string(
-            index=False
-        )
-    )
+    print(ablation.to_string(index=False))
 
     save_dataframe(
         ablation,
@@ -459,40 +304,21 @@ def main():
     # 5. REPEATABILITY
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[5/9] Repeatability across repeated executions"
-    )
-    print("-" * 75)
+    print("\n[5/12] Repeatability across repeated executions")
 
-    repeatability = (
-        repeatability_analysis(
-            trust
-        )
-    )
+    repeatability = repeatability_analysis(trust)
 
     print(
+        repeatability.head(20).to_string(index=False)
+    )
+
+    repeatability_result = repeatability_summary(
         repeatability
-        .head(20)
-        .to_string(
-            index=False
-        )
     )
 
-    repeatability_result = (
-        repeatability_summary(
-            repeatability
-        )
-    )
+    print("\nRepeatability summary:")
 
-    print(
-        "\nRepeatability summary:"
-    )
-
-    print(
-        repeatability_result
-    )
+    print(repeatability_result)
 
     save_dataframe(
         repeatability,
@@ -500,27 +326,14 @@ def main():
     )
 
     # ========================================================
-    # 6. CROSS DOMAIN
+    # 6. CROSS-DOMAIN VALIDATION
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[6/9] Cross-domain ranking consistency"
-    )
-    print("-" * 75)
+    print("\n[6/12] Cross-domain ranking consistency")
 
-    cross_domain = (
-        cross_domain_validation(
-            trust
-        )
-    )
+    cross_domain = cross_domain_validation(trust)
 
-    print(
-        cross_domain.to_string(
-            index=False
-        )
-    )
+    print(cross_domain.to_string(index=False))
 
     save_dataframe(
         cross_domain,
@@ -531,40 +344,17 @@ def main():
     # 7. LEAVE-ONE-TASK-OUT
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[7/9] Leave-one-task-out robustness"
-    )
-    print("-" * 75)
+    print("\n[7/12] Leave-one-task-out robustness")
 
-    loto = (
-        leave_one_task_out(
-            trust
-        )
-    )
+    loto = leave_one_task_out(trust)
 
-    print(
-        loto
-        .head(20)
-        .to_string(
-            index=False
-        )
-    )
+    print(loto.head(20).to_string(index=False))
 
-    loto_summary = (
-        robustness_summary(
-            loto
-        )
-    )
+    loto_summary = robustness_summary(loto)
 
-    print(
-        "\nRobustness summary:"
-    )
+    print("\nRobustness summary:")
 
-    print(
-        loto_summary
-    )
+    print(loto_summary)
 
     save_dataframe(
         loto,
@@ -575,24 +365,11 @@ def main():
     # 8. BASELINE COMPARISON
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[8/9] Baseline comparison"
-    )
-    print("-" * 75)
+    print("\n[8/12] Baseline comparison")
 
-    baseline = (
-        compare_baseline_vs_trusteval(
-            trust
-        )
-    )
+    baseline = compare_baseline_vs_trusteval(trust)
 
-    print(
-        baseline.to_string(
-            index=False
-        )
-    )
+    print(baseline.to_string(index=False))
 
     save_dataframe(
         baseline,
@@ -600,74 +377,152 @@ def main():
     )
 
     # ========================================================
-    # 9. CALIBRATION
+    # 9. EXECUTION OUTCOME ANALYSIS
     # ========================================================
 
-    print("\n")
-    print("-" * 75)
-    print(
-        "[9/9] Calibration / outcome consistency"
-    )
-    print("-" * 75)
+    print("\n[9/12] Execution outcome analysis")
 
-    calibration = (
-        calibration_analysis(
-            trust
-        )
-    )
+    calibration = calibration_analysis(trust)
 
-    print(
-        calibration
-    )
+    print("\nExecution outcome results:")
+
+    for key, value in calibration.items():
+
+        print(f"{key}: {value}")
 
     save_dataframe(
-        pd.DataFrame(
-            [calibration]
-        ),
+        pd.DataFrame([calibration]),
         "calibration.csv"
     )
 
     # ========================================================
-    # OVERALL SUMMARY
+    # 10. TASK-CLUSTER BOOTSTRAP
     # ========================================================
+
+    print("\n[10/12] Task-cluster bootstrap")
+
+    cluster_results = task_cluster_bootstrap(
+        trust,
+        n_bootstrap=2000,
+        seed=42
+    )
+
+    print("\nTask-cluster bootstrap results:")
+
+    for key, value in cluster_results.items():
+
+        print(f"{key}: {value}")
+
+    save_dataframe(
+        pd.DataFrame([cluster_results]),
+        "task_cluster_bootstrap.csv"
+    )
+
+    # ========================================================
+    # 11. EXPLICIT FAILURE SAMPLE
+    # ========================================================
+
+    print("\n[11/12] Reporting individual failed executions")
+
+    failures = failure_sample_report(trust)
+
+    print("\nFailed execution sample:")
+
+    if failures.empty:
+
+        print("No failed executions found.")
+
+    else:
+
+        print(failures.to_string(index=False))
+
+    print(f"\nTotal failed executions: {len(failures)}")
+
+    save_dataframe(
+        failures,
+        "failure_sample.csv"
+    )
+
+    # ========================================================
+    # 12. FAILURE DISTRIBUTION
+    # ========================================================
+
+    print("\n[12/12] Reporting failures by task and framework")
+
+    failure_counts = failure_distribution(trust)
+
+    print("\nFailure distribution:")
+
+    print(
+        failure_counts.to_string(index=False)
+    )
+
+    save_dataframe(
+        failure_counts,
+        "failure_distribution.csv"
+    )
+
+    # ========================================================
+    # OVERALL VALIDATION SUMMARY
+    # ========================================================
+
+    print("\nGenerating overall validation summary...")
 
     summary = pd.DataFrame(
         [{
-            "n_runs":
-                len(trust),
+            "n_runs": len(trust),
 
-            "n_tasks":
-                trust["task_id"]
-                .nunique(),
+            "n_tasks": trust["task_id"].nunique(),
 
-            "n_frameworks":
-                trust["framework"]
-                .nunique(),
+            "n_frameworks": trust["framework"].nunique(),
 
-            "n_domains":
-                trust["domain"]
-                .nunique(),
+            "n_domains": trust["domain"].nunique(),
 
-            "n_repetitions_max":
-                trust
-                .groupby(
-                    [
-                        "task_id",
-                        "framework"
-                    ]
-                )["repetition"]
-                .count()
-                .max(),
+            "n_repetitions_max": (
+                trust.groupby(
+                    ["task_id", "framework"]
+                )["repetition"].count().max()
+            ),
 
-            "mean_composite":
-                trust[
-                    "composite_score"
-                ].mean(),
+            "n_successful_runs": calibration[
+                "n_successful_runs"
+            ],
 
-            "std_composite":
-                trust[
-                    "composite_score"
-                ].std(),
+            "n_failed_runs": calibration[
+                "n_failed_runs"
+            ],
+
+            "success_rate": calibration[
+                "success_rate"
+            ],
+
+            "failure_rate": calibration[
+                "failure_rate"
+            ],
+
+            "n_tasks_with_failures": calibration[
+                "n_tasks_with_failures"
+            ],
+
+            "mean_composite": trust[
+                "composite_score"
+            ].mean(),
+
+            "std_composite": trust[
+                "composite_score"
+            ].std(),
+
+            "bootstrap_pearson_mean": cluster_results[
+                "bootstrap_pearson_mean"
+            ],
+
+            "bootstrap_ci_lower": cluster_results[
+                "bootstrap_pearson_ci_lower"
+            ],
+
+            "bootstrap_ci_upper": cluster_results[
+                "bootstrap_pearson_ci_upper"
+            ],
         }]
     )
 
@@ -677,31 +532,43 @@ def main():
     )
 
     # ========================================================
+    # GENERATE COMPARISON TABLES AUTOMATICALLY
+    # ========================================================
+
+    print("\nGenerating comparison_tables.md...")
+
+    comparison_path = generate_comparison_tables(
+        output_dir=OUTPUT_DIR
+    )
+
+    print(
+        f"\nComparison tables successfully generated: "
+        f"{comparison_path}"
+    )
+
+    # ========================================================
     # COMPLETE
     # ========================================================
 
     print("\n")
-    print("=" * 75)
-    print(
-        "VALIDATION COMPLETE"
-    )
+
     print("=" * 75)
 
-    print(
-        "\nAll validation outputs were saved to:"
-    )
+    print("VALIDATION COMPLETE")
+
+    print("=" * 75)
+
+    print(f"\nAll validation outputs were saved to:\n{OUTPUT_DIR}")
+
+    print("\nComparison report:")
+
+    print(comparison_path)
+
+    print("\nHuman ratings were NOT used.")
 
     print(
-        f"  {OUTPUT_DIR}"
-    )
-
-    print(
-        "\nHuman ratings were NOT used."
-    )
-
-    print(
-        "\nThe Member 3 pipeline validated "
-        f"{len(trust)} execution runs."
+        f"\nThe Member 3 pipeline validated {len(trust)} "
+        "execution runs."
     )
 
     print("=" * 75)

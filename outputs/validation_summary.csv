@@ -1,2 +1,2 @@
-n_runs,n_tasks,n_frameworks,n_domains,n_repetitions_max,mean_composite,std_composite
-720,30,3,8,8,0.8273005555555557,0.0973210503566839
+n_runs,n_tasks,n_frameworks,n_domains,n_repetitions_max,n_successful_runs,n_failed_runs,success_rate,failure_rate,n_tasks_with_failures,mean_composite,std_composite,bootstrap_pearson_mean,bootstrap_ci_lower,bootstrap_ci_upper
+720,30,3,8,8,714,6,0.9916666666666667,0.008333333333333333,4,0.8273005555555557,0.0973210503566839,0.5655945475378062,0.2877098881328844,0.7554348015562165

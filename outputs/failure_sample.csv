@@ -1,0 +1,7 @@
+task_id,framework,repetition,status,composite_score
+education_016,crewai,7,failed,0.1743
+lifestyle_030,crewai,8,failed,0.2226
+productivity_018,crewai,8,failed,0.2037
+technical_021,autogen,3,failed,0.0889
+technical_021,crewai,3,failed,0.2599
+technical_021,langchain,3,failed,0.2994
