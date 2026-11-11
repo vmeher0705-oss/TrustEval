@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import warnings
 
@@ -314,48 +313,44 @@ def plot_ablation(ablation, figures_dir):
 # ============================================================
 
 def plot_repeatability(trust, figures_dir):
+    """Run-to-run spread: standard deviation of the repeated runs of each
+    task, shown per framework (one point = one task x framework pair)."""
 
-    if trust is None or trust.empty:
-        return skip_plot("Repeatability", "Execution data missing")
+    required = {"task_id", "framework", "composite_score"}
 
-    if not {"framework", "composite_score"}.issubset(trust.columns):
+    if trust is None or trust.empty or not required.issubset(trust.columns):
         return skip_plot(
             "Repeatability",
-            "framework or composite_score column missing"
+            "task_id, framework or composite_score column missing"
         )
 
-    data = trust[["framework", "composite_score"]].copy()
-
+    data = trust[["task_id", "framework", "composite_score"]].copy()
     data["composite_score"] = pd.to_numeric(
         data["composite_score"], errors="coerce"
     )
-
     data = data.dropna()
 
-    groups = []
-    labels = []
+    spread = (
+        data.groupby(["framework", "task_id"])["composite_score"]
+        .std(ddof=0)
+        .reset_index(name="std")
+    )
 
-    for framework, group in data.groupby("framework"):
+    groups, labels = [], []
 
-        scores = group["composite_score"].to_numpy()
-
-        if len(scores) > 0:
-            groups.append(scores)
-            labels.append(str(framework))
+    for framework, group in spread.groupby("framework"):
+        groups.append(group["std"].to_numpy())
+        labels.append(str(framework))
 
     if not groups:
         return skip_plot("Repeatability", "No usable scores")
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.boxplot(
-        groups,
-        tick_labels=labels
-    )
+    ax.boxplot(groups, tick_labels=labels)
 
-    ax.set_ylabel("Composite trust score")
-    ax.set_title("Repeatability Across Executions")
-    ax.set_ylim(0, 1)
+    ax.set_ylabel("Std. dev. of composite across repeated runs of a task")
+    ax.set_title("Repeatability: Run-to-Run Variation per Task")
     ax.tick_params(axis="x", rotation=20)
 
     return save_figure(
@@ -483,7 +478,7 @@ def plot_baseline_comparison(baseline, figures_dir):
 
     metric = numeric_column(
         baseline,
-        ["mean_composite", "mean_score",
+        ["overall_mean", "mean_composite", "mean_score",
          "composite_score", "score"]
     )
 
@@ -509,7 +504,8 @@ def plot_baseline_comparison(baseline, figures_dir):
         data[metric]
     )
 
-    ax.set_ylabel("Mean composite trust score")
+    ax.set_ylabel("Overall mean score (720 runs)")
+    ax.set_ylim(0, 1.05)
     ax.set_title("Baseline Comparison")
     ax.tick_params(axis="x", rotation=20)
 
@@ -599,7 +595,7 @@ def plot_failure_distribution(failures, figures_dir):
 
     count = numeric_column(
         failures,
-        ["failure_count", "failures", "n_failures", "count"]
+        ["n_failed", "failure_count", "failures", "n_failures", "count"]
     )
 
     if count:
